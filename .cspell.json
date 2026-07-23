@@ -1,0 +1,16 @@
+{
+    "ignorePaths": ["go.mod", "go.sum"],
+    "language": "en",
+    "words": [
+        "coverprofile",
+        "fileclosure",
+        "fset",
+        "GOARCH",
+        "gocover",
+        "gopls",
+        "lemes",
+        "pkgs",
+        "stdlib",
+        "testmod"
+    ]
+}
