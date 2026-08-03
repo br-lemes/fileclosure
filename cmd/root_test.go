@@ -10,6 +10,7 @@ import (
 
 func resetRootCmd() (out, errOut *bytes.Buffer) {
 	outPath = ""
+	depthLimit = -1
 	rootCmd.SilenceUsage = false
 	out, errOut = &bytes.Buffer{}, &bytes.Buffer{}
 	rootCmd.SetOut(out)
@@ -221,6 +222,173 @@ func TestRootRun_UnreadableExtraFile(t *testing.T) {
 
 func TestRootRun_MissingArgs(t *testing.T) {
 	resetRootCmd()
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestRootRun_DepthFlag_SignaturesAndTypesSections(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"main.go": `package main
+
+func main() {
+	A()
+}
+`,
+		"a.go": `package main
+
+func A() {
+	B()
+}
+`,
+		"b.go": `package main
+
+func B() Config {
+	return Config{}
+}
+
+type Config struct {
+	Name string
+}
+`,
+	})
+
+	out, _ := resetRootCmd()
+	rootCmd.SetArgs([]string{"--depth", "1", filepath.Join(dir, "main.go")})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "Depth limit: 1") {
+		t.Errorf("output missing depth limit header:\n%s", got)
+	}
+	if !strings.Contains(got, "SIGNATURES (beyond depth limit)") ||
+		!strings.Contains(got, "func B() Config") {
+		t.Errorf("output missing expected signature section:\n%s", got)
+	}
+	if !strings.Contains(got, "TYPES") ||
+		!strings.Contains(got, "type Config struct") {
+		t.Errorf("output missing expected types section:\n%s", got)
+	}
+	if strings.Contains(got, "FILE: b.go") {
+		t.Errorf(
+			"b.go should not be included in full past the depth limit:\n%s",
+			got)
+	}
+}
+
+func TestRootRun_DepthFlag_ExtraFilesAlwaysFull(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"main.go": `package main
+
+func main() {
+	A()
+}
+`,
+		"a.go": `package main
+
+func A() {
+	B()
+}
+`,
+		"b.go":      "package main\n\nfunc B() {}\n",
+		"README.md": "# testmod\n",
+	})
+
+	out, _ := resetRootCmd()
+	rootCmd.SetArgs([]string{
+		"--depth", "0",
+		filepath.Join(dir, "main.go"),
+		filepath.Join(dir, "README.md"),
+	})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "FILE: README.md") ||
+		!strings.Contains(got, "README.md (extra)") {
+		t.Errorf("extra file should always be included in full regardless of"+
+			" --depth:\n%s", got)
+	}
+}
+
+func TestRootRun_UnlimitedByDefault_NoDepthHeader(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod":  "module testmod\n\ngo 1.21\n",
+		"main.go": "package main\n\nfunc main() {}\n",
+	})
+
+	out, _ := resetRootCmd()
+	rootCmd.SetArgs([]string{filepath.Join(dir, "main.go")})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if strings.Contains(got, "Depth limit:") {
+		t.Errorf("depth header should not appear when --depth is not set:\n%s",
+			got)
+	}
+}
+
+func TestRootRun_DepthFlag_VarsSection(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"main.go": `package main
+
+func main() {
+	A()
+}
+`,
+		"a.go": `package main
+
+func A() {
+	_ = MaxRetries
+}
+`,
+		"config.go": `package main
+
+var MaxRetries = 5
+`,
+	})
+
+	out, _ := resetRootCmd()
+	rootCmd.SetArgs([]string{"--depth", "1", filepath.Join(dir, "main.go")})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "VARS/CONSTS") ||
+		!strings.Contains(got, "var MaxRetries = 5") {
+		t.Errorf("output missing expected vars/consts section:\n%s", got)
+	}
+	if strings.Contains(got, "FILE: config.go") {
+		t.Errorf(
+			"config.go should not be included in full just for one var:\n%s",
+			got)
+	}
+}
+
+func TestRootRun_DepthFlag_ModuleNotFound(t *testing.T) {
+	dir := t.TempDir()
+
+	resetRootCmd()
+	rootCmd.SetArgs([]string{"--depth", "1", filepath.Join(dir, "main.go")})
 
 	err := rootCmd.Execute()
 	if err == nil {

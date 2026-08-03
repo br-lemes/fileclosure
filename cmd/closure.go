@@ -28,13 +28,13 @@ func findModuleRoot(start string) (string, error) {
 	}
 }
 
-func computeClosure(cmd *cobra.Command, absFile string) (files []string, root string, err error) {
+func loadModule(cmd *cobra.Command, absFile string) (fset *token.FileSet, byFile map[string]*ast.File, fileToPkg map[string]*packages.Package, root string, err error) {
 	root, err = findModuleRoot(filepath.Dir(absFile))
 	if err != nil {
-		return nil, "", err
+		return nil, nil, nil, "", err
 	}
 
-	fset := token.NewFileSet()
+	fset = token.NewFileSet()
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles |
 			packages.NeedCompiledGoFiles | packages.NeedImports |
@@ -45,15 +45,15 @@ func computeClosure(cmd *cobra.Command, absFile string) (files []string, root st
 
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
-		return nil, "", fmt.Errorf("loading packages: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("loading packages: %w", err)
 	}
 	if packages.PrintErrors(pkgs) > 0 {
 		fmt.Fprintln(cmd.ErrOrStderr(),
 			"warning: some packages had load errors (continuing anyway)")
 	}
 
-	byFile := map[string]*ast.File{}
-	fileToPkg := map[string]*packages.Package{}
+	byFile = map[string]*ast.File{}
+	fileToPkg = map[string]*packages.Package{}
 
 	for _, p := range pkgs {
 		for i, astFile := range p.Syntax {
@@ -70,6 +70,42 @@ func computeClosure(cmd *cobra.Command, absFile string) (files []string, root st
 				fileToPkg[absName] = p
 			}
 		}
+	}
+
+	return fset, byFile, fileToPkg, root, nil
+}
+
+// Field/method selectors resolve to the field's own object, not its
+// struct's type - a type only surfaces if named directly somewhere.
+func scanRefs(node ast.Node, info *types.Info) []types.Object {
+	var objects []types.Object
+	seen := map[types.Object]bool{}
+	add := func(obj types.Object) {
+		if obj == nil || seen[obj] {
+			return
+		}
+		seen[obj] = true
+		objects = append(objects, obj)
+	}
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch nd := n.(type) {
+		case *ast.Ident:
+			add(info.Uses[nd])
+		case *ast.SelectorExpr:
+			sel, ok := info.Selections[nd]
+			if ok {
+				add(sel.Obj())
+			}
+		}
+		return true
+	})
+	return objects
+}
+
+func computeClosure(cmd *cobra.Command, absFile string) (files []string, root string, err error) {
+	fset, byFile, fileToPkg, root, err := loadModule(cmd, absFile)
+	if err != nil {
+		return nil, "", err
 	}
 
 	_, ok := byFile[absFile]
@@ -93,38 +129,22 @@ func computeClosure(cmd *cobra.Command, absFile string) (files []string, root st
 			continue
 		}
 
-		add := func(obj types.Object) {
-			if obj == nil {
-				return
-			}
+		for _, obj := range scanRefs(astFile, pkg.TypesInfo) {
 			pos := obj.Pos()
 			if !pos.IsValid() {
-				return // builtin (len, error, etc.)
+				continue // builtin (len, error, etc.)
 			}
 			filename := fset.Position(pos).Filename
 			absName, _ := filepath.Abs(filename)
 			_, inModule := byFile[absName]
 			if !inModule {
-				return // stdlib or external dependency symbol: out of scope
+				continue // stdlib or external dependency symbol: out of scope
 			}
 			if !visited[absName] {
 				visited[absName] = true
 				queue = append(queue, absName)
 			}
 		}
-
-		ast.Inspect(astFile, func(n ast.Node) bool {
-			switch node := n.(type) {
-			case *ast.Ident:
-				add(pkg.TypesInfo.Uses[node])
-			case *ast.SelectorExpr:
-				sel, ok := pkg.TypesInfo.Selections[node]
-				if ok {
-					add(sel.Obj())
-				}
-			}
-			return true
-		})
 	}
 
 	files = make([]string, 0, len(visited))
