@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/tools/go/packages"
@@ -28,6 +29,15 @@ func findModuleRoot(start string) (string, error) {
 	}
 }
 
+func fileInModule(root, absPath string) bool {
+	rel, err := filepath.Rel(root, absPath)
+	if err != nil { //+gocover:ignore:block Windows-only cross-volume error
+		return false
+	}
+	return rel == "." || (rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
 func loadModule(cmd *cobra.Command, absFile string) (fset *token.FileSet, byFile map[string]*ast.File, fileToPkg map[string]*packages.Package, root string, err error) {
 	root, err = findModuleRoot(filepath.Dir(absFile))
 	if err != nil {
@@ -39,8 +49,9 @@ func loadModule(cmd *cobra.Command, absFile string) (fset *token.FileSet, byFile
 		Mode: packages.NeedName | packages.NeedFiles |
 			packages.NeedCompiledGoFiles | packages.NeedImports |
 			packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo,
-		Dir:  root,
-		Fset: fset,
+		Dir:   root,
+		Fset:  fset,
+		Tests: true,
 	}
 
 	pkgs, err := packages.Load(cfg, "./...")
@@ -64,6 +75,9 @@ func loadModule(cmd *cobra.Command, absFile string) (fset *token.FileSet, byFile
 				name = fset.Position(astFile.Pos()).Filename
 			}
 			absName, _ := filepath.Abs(name)
+			if !fileInModule(root, absName) {
+				continue
+			}
 			_, exists := byFile[absName]
 			if !exists {
 				byFile[absName] = astFile

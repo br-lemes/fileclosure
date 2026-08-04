@@ -146,6 +146,110 @@ func Thing() {}
 	}
 }
 
+func TestComputeClosure_TestFileEntry(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"main.go": `package main
+
+func Foo() {}
+
+func Unused() {}
+`,
+		"main_test.go": `package main
+
+import "testing"
+
+func TestFoo(t *testing.T) {
+	Foo()
+}
+`,
+	})
+
+	files, root, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "main_test.go")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if root != dir {
+		t.Fatalf("root = %q, want %q", root, dir)
+	}
+
+	want := map[string]bool{
+		filepath.Join(dir, "main_test.go"): true,
+		filepath.Join(dir, "main.go"):      true,
+	}
+	if len(files) != len(want) {
+		t.Fatalf("files = %v, want exactly %v", files, want)
+	}
+	for _, f := range files {
+		if !want[f] {
+			t.Errorf("unexpected file in closure: %s", f)
+		}
+	}
+}
+
+func TestComputeClosure_ExternalTestFileEntry(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"lib/lib.go": `package lib
+
+func Exported() {}
+
+func unused() {}
+`,
+		"lib/lib_test.go": `package lib_test
+
+import (
+	"testing"
+	"testmod/lib"
+)
+
+func TestExported(t *testing.T) {
+	lib.Exported()
+}
+`,
+	})
+
+	files, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "lib/lib_test.go")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := map[string]bool{
+		filepath.Join(dir, "lib/lib_test.go"): true,
+		filepath.Join(dir, "lib/lib.go"):      true,
+	}
+	if len(files) != len(want) {
+		t.Fatalf("files = %v, want exactly %v", files, want)
+	}
+	for _, f := range files {
+		if !want[f] {
+			t.Errorf("unexpected file in closure: %s", f)
+		}
+	}
+}
+
+func TestFileInModule(t *testing.T) {
+	root := "/mod/root"
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{root, true},
+		{root + "/a.go", true},
+		{root + "/pkg/b.go", true},
+		{"/mod/other/a.go", false},
+		{"/elsewhere/a.go", false},
+	}
+	for _, c := range cases {
+		got := fileInModule(root, c.path)
+		if got != c.want {
+			t.Errorf("fileInModule(%q, %q) = %v, want %v", root, c.path, got, c.want)
+		}
+	}
+}
+
 func TestComputeClosure_FileNotInModule(t *testing.T) {
 	dir := writeModule(t, map[string]string{
 		"go.mod": "module testmod\n\ngo 1.21\n",
