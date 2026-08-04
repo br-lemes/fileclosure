@@ -9,7 +9,8 @@ import (
 func TestComputeDepthClosure_ModuleNotFound(t *testing.T) {
 	dir := t.TempDir()
 
-	_, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 2)
+	_, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 2)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -26,8 +27,8 @@ func Ignored() {}
 `,
 	})
 
-	_, err :=
-		computeDepthClosure(testCmd(), filepath.Join(dir, "ignored.go"), 2)
+	_, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "ignored.go")}, 2)
 	if err == nil {
 		t.Fatal("expected error for a file excluded from the build, got nil")
 	}
@@ -54,7 +55,8 @@ func B() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 2)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -106,7 +108,8 @@ func C() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -169,7 +172,8 @@ type Config struct {
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -210,7 +214,8 @@ type Config struct {
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -243,7 +248,8 @@ var MaxRetries = 5
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -286,7 +292,8 @@ const HiddenConst = 99
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -312,7 +319,8 @@ func A() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 0)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -341,7 +349,8 @@ const _ = 2
 	})
 
 	// Exercises buildObjIndex's blank-identifier skip (var _ / const _).
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -370,7 +379,8 @@ func A() {
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -423,7 +433,8 @@ func Shared() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 2)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -473,7 +484,8 @@ func B() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 2)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -517,7 +529,8 @@ func FuncC() {}
 
 	// depth 0 forces all three into sigs, exercising sortUnits' comparator
 	// both across files and within shared.go.
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 0)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -560,7 +573,8 @@ func (g Greeter) Greet() string { return "hi" }
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(), filepath.Join(dir, "main.go"), 1)
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -573,5 +587,109 @@ func (g Greeter) Greet() string { return "hi" }
 		!strings.Contains(dc.types[0].text, "type Greeter struct") {
 		t.Fatalf("types = %v, want Greeter extracted for the receiver",
 			dc.types)
+	}
+}
+
+func TestComputeDepthClosure_MultipleEntryFiles(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"a.go": `package main
+
+func A() {
+	Shared()
+}
+`,
+		"b.go": "package main\n\nfunc B() {}\n",
+		"shared.go": `package main
+
+func Shared() {}
+`,
+	})
+
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")}, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := map[string]bool{
+		filepath.Join(dir, "a.go"):      true,
+		filepath.Join(dir, "b.go"):      true,
+		filepath.Join(dir, "shared.go"): true,
+	}
+	if len(dc.fullFiles) != len(want) {
+		t.Fatalf("fullFiles = %v, want exactly %v", dc.fullFiles, want)
+	}
+	for _, f := range dc.fullFiles {
+		if !want[f] {
+			t.Errorf("unexpected file in closure: %s", f)
+		}
+	}
+}
+
+func TestComputeDepthClosure_MultipleEntryFiles_BothAtDepthZero(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"a.go": `package main
+
+func A() {
+	B()
+}
+`,
+		"b.go": `package main
+
+func B() {
+	C()
+}
+`,
+		"c.go": `package main
+
+// C is one hop beyond b.go, which is itself an entry point (depth 0) -
+// B's call into C crosses the depth-0 limit and becomes signature-only,
+// even though b.go itself is included in full as an entry point.
+func C() {}
+`,
+	})
+
+	dc, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")}, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := map[string]bool{
+		filepath.Join(dir, "a.go"): true,
+		filepath.Join(dir, "b.go"): true,
+	}
+	if len(dc.fullFiles) != len(want) {
+		t.Fatalf("fullFiles = %v, want exactly %v", dc.fullFiles, want)
+	}
+	for _, f := range dc.fullFiles {
+		if f == filepath.Join(dir, "c.go") {
+			t.Fatal("c.go must not be reached past a signature-only function")
+		}
+	}
+	if len(dc.sigs) != 1 || dc.sigs[0].file != filepath.Join(dir, "c.go") {
+		t.Fatalf("sigs = %v, want exactly one signature from c.go", dc.sigs)
+	}
+}
+
+func TestComputeDepthClosure_MultipleEntryFiles_OneNotInModule(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"a.go":   "package main\n\nfunc A() {}\n",
+		"ignored.go": `//go:build ignore
+
+package main
+
+func Ignored() {}
+`,
+	})
+
+	_, err := computeDepthClosure(testCmd(),
+		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "ignored.go")},
+		1)
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

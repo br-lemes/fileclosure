@@ -102,21 +102,26 @@ func scanRefs(node ast.Node, info *types.Info) []types.Object {
 	return objects
 }
 
-func computeClosure(cmd *cobra.Command, absFile string) (files []string, root string, err error) {
-	fset, byFile, fileToPkg, root, err := loadModule(cmd, absFile)
+func computeClosure(cmd *cobra.Command, absFiles []string) (files []string, root string, err error) {
+	fset, byFile, fileToPkg, root, err := loadModule(cmd, absFiles[0])
 	if err != nil {
 		return nil, "", err
 	}
 
-	_, ok := byFile[absFile]
-	if !ok {
-		return nil, "", fmt.Errorf(
-			"file %s was not found among the module's loaded packages at %s",
-			absFile, root)
+	visited := map[string]bool{}
+	queue := make([]string, 0, len(absFiles))
+	for _, absFile := range absFiles {
+		_, ok := byFile[absFile]
+		if !ok {
+			return nil, "", fmt.Errorf(
+				"file %s not found in module's loaded packages at %s",
+				absFile, root)
+		}
+		if !visited[absFile] {
+			visited[absFile] = true
+			queue = append(queue, absFile)
+		}
 	}
-
-	visited := map[string]bool{absFile: true}
-	queue := []string{absFile}
 
 	for len(queue) > 0 {
 		cur := queue[0]

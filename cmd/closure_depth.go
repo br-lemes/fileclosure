@@ -13,14 +13,14 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// - Entry file: always included in full.
+// - Entry files (.go CLI args): always included in full.
 // - Function reached at depth <= limit: whole file included, scanned further.
 // - Function reached beyond limit: signature only, body never scanned.
 // - Types: always resolved in full wherever referenced (in-limit code or
 //   an emitted signature), transitively, no depth cap of their own.
 // - Vars/consts: only pulled in via in-limit scanning; never appear in
 //   signatures, so unreachable ones beyond the limit are just dropped.
-// - Extra CLI args: untouched, always whole-file (see root.go).
+// - Non-Go CLI args: untouched, always whole-file (see root.go).
 
 type depthClosure struct {
 	root      string
@@ -105,28 +105,35 @@ func filterTypeNames(objects []types.Object) []types.Object {
 	return out
 }
 
-func computeDepthClosure(cmd *cobra.Command, absFile string, depthLimit int) (*depthClosure, error) {
-	fset, byFile, fileToPkg, root, err := loadModule(cmd, absFile)
+func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) (*depthClosure, error) {
+	fset, byFile, fileToPkg, root, err := loadModule(cmd, absFiles[0])
 	if err != nil {
 		return nil, err
 	}
-	_, ok := byFile[absFile]
-	if !ok {
-		return nil, fmt.Errorf(
-			"file %s was not found among the module's loaded packages at %s",
-			absFile, root)
+	for _, absFile := range absFiles {
+		_, ok := byFile[absFile]
+		if !ok {
+			return nil, fmt.Errorf(
+				"file %s not found in module's loaded packages at %s",
+				absFile, root)
+		}
 	}
 
 	idx := buildObjIndex(byFile, fileToPkg)
 
-	includedFiles := map[string]bool{absFile: true}
-	visited := map[string]bool{absFile: true}
+	includedFiles := map[string]bool{}
+	visited := map[string]bool{}
 
 	type queued struct {
 		file  string
 		depth int
 	}
-	queue := []queued{{absFile, 0}}
+	var queue []queued
+	for _, absFile := range absFiles {
+		includedFiles[absFile] = true
+		visited[absFile] = true
+		queue = append(queue, queued{absFile, 0})
+	}
 
 	type funcCandidate struct {
 		obj      *types.Func

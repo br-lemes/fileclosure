@@ -85,7 +85,8 @@ func Unused() {}
 `,
 	})
 
-	files, root, err := computeClosure(testCmd(), filepath.Join(dir, "main.go"))
+	files, root, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -125,7 +126,8 @@ func Thing() {}
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(), filepath.Join(dir, "main.go"))
+	files, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +157,8 @@ func Ignored() {}
 `,
 	})
 
-	_, _, err := computeClosure(testCmd(), filepath.Join(dir, "ignored.go"))
+	_, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "ignored.go")})
 	if err == nil {
 		t.Fatal("expected error for a file excluded from the build, got nil")
 	}
@@ -164,7 +167,8 @@ func Ignored() {}
 func TestComputeClosure_ModuleNotFound(t *testing.T) {
 	dir := t.TempDir()
 
-	_, _, err := computeClosure(testCmd(), filepath.Join(dir, "main.go"))
+	_, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -176,7 +180,8 @@ func TestComputeClosure_LoadError(t *testing.T) {
 		"main.go": "package main\n\nfunc main() {}\n",
 	})
 
-	_, _, err := computeClosure(testCmd(), filepath.Join(dir, "main.go"))
+	_, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")})
 	if err == nil {
 		t.Fatal("expected error from packages.Load, got nil")
 	}
@@ -197,7 +202,7 @@ func main() {
 	cmd := testCmd()
 	cmd.SetErr(errOut)
 
-	_, _, err := computeClosure(cmd, filepath.Join(dir, "main.go"))
+	_, _, err := computeClosure(cmd, []string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected hard error: %v", err)
 	}
@@ -226,7 +231,8 @@ func (g Greeter) Greet() string { return "hi" }
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(), filepath.Join(dir, "main.go"))
+	files, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -257,12 +263,114 @@ func main() {
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(), filepath.Join(dir, "main.go"))
+	files, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(files) != 1 || files[0] != filepath.Join(dir, "main.go") {
 		t.Fatalf("files = %v, want only main.go", files)
+	}
+}
+
+func TestComputeClosure_MultipleEntryFiles(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"a.go": `package main
+
+func A() {
+	Shared()
+}
+`,
+		"b.go": "package main\n\nfunc B() {}\n",
+		"shared.go": `package main
+
+func Shared() {}
+`,
+		"unused.go": "package main\n\nfunc Unused() {}\n",
+	})
+
+	files, root, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if root != dir {
+		t.Fatalf("root = %q, want %q", root, dir)
+	}
+
+	want := map[string]bool{
+		filepath.Join(dir, "a.go"):      true,
+		filepath.Join(dir, "b.go"):      true,
+		filepath.Join(dir, "shared.go"): true,
+	}
+	if len(files) != len(want) {
+		t.Fatalf("files = %v, want exactly %v (union of both entries)",
+			files, want)
+	}
+	for _, f := range files {
+		if !want[f] {
+			t.Errorf("unexpected file in closure: %s", f)
+		}
+	}
+}
+
+func TestComputeClosure_MultipleEntryFiles_SharedFileNotDuplicated(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"a.go": `package main
+
+func A() {
+	Shared()
+}
+`,
+		"b.go": `package main
+
+func B() {
+	Shared()
+}
+`,
+		"shared.go": `package main
+
+// Shared is reachable from both entry points; it must appear once.
+func Shared() {}
+`,
+	})
+
+	files, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	count := 0
+	for _, f := range files {
+		if f == filepath.Join(dir, "shared.go") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("shared.go appeared %d times, want exactly once: %v",
+			count, files)
+	}
+}
+
+func TestComputeClosure_MultipleEntryFiles_OneNotInModule(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod": "module testmod\n\ngo 1.21\n",
+		"a.go":   "package main\n\nfunc A() {}\n",
+		"ignored.go": `//go:build ignore
+
+package main
+
+func Ignored() {}
+`,
+	})
+
+	_, _, err := computeClosure(testCmd(),
+		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "ignored.go")})
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }
 

@@ -16,13 +16,12 @@ var depthLimit int
 var rootCmd = &cobra.Command{
 	RunE:  rootRun,
 	Args:  cobra.MinimumNArgs(1),
-	Use:   "fileclosure <file.go> [files...]",
-	Short: "Compute the transitive file-level dependency closure of a Go file",
-	Long: `Compute the transitive file-level dependency closure of a Go file
+	Use:   "fileclosure <files...>",
+	Short: "Concatenate files, resolving the Go dependency closure",
+	Long: `Concatenate files, resolving the Go dependency closure
 
 Arguments:
-  file.go   Entry point analyzed for the dependency closure.
-  files     Extra files included directly, without dependency analysis.`,
+  files   Go files pull in their dependency closure; others are included as-is`,
 }
 
 func Execute(version string) error {
@@ -39,21 +38,29 @@ func init() {
 }
 
 type item struct {
-	extra bool
+	nonGo bool
 	path  string
 }
 
 func rootRun(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
-	entryArg, extraArgs := args[0], args[1:]
 
-	if filepath.Ext(entryArg) != ".go" {
-		return fmt.Errorf("first argument must be a .go file, got %s", entryArg)
+	var goArgs, otherArgs []string
+	for _, a := range args {
+		if filepath.Ext(a) == ".go" {
+			goArgs = append(goArgs, a)
+		} else {
+			otherArgs = append(otherArgs, a)
+		}
 	}
 
-	absFile, err := filepath.Abs(entryArg)
-	if err != nil { //+gocover:ignore:block only fails if cwd is gone
-		return err
+	absGoFiles := make([]string, 0, len(goArgs))
+	for _, g := range goArgs {
+		abs, err := filepath.Abs(g)
+		if err != nil { //+gocover:ignore:block only fails if cwd is gone
+			return err
+		}
+		absGoFiles = append(absGoFiles, abs)
 	}
 
 	dest := "stdout"
@@ -67,39 +74,93 @@ func rootRun(cmd *cobra.Command, args []string) error {
 		dest = outPath
 	}
 
-	if depthLimit >= 0 {
-		return runDepthLimited(cmd, absFile, extraArgs, dest)
+	if len(absGoFiles) == 0 {
+		return runConcatOnly(cmd, otherArgs, dest)
 	}
-	return runUnlimited(cmd, absFile, extraArgs, dest)
+	if depthLimit >= 0 {
+		return runDepthLimited(cmd, absGoFiles, otherArgs, dest)
+	}
+	return runUnlimited(cmd, absGoFiles, otherArgs, dest)
 }
 
-func runDepthLimited(cmd *cobra.Command, absFile string, extraArgs []string, dest string) error {
-	dc, err := computeDepthClosure(cmd, absFile, depthLimit)
+func runConcatOnly(cmd *cobra.Command, args []string, dest string) error {
+	items, err := resolveItems(args, map[string]bool{}, false)
+	if err != nil {
+		//+gocover:ignore:block downstream of an already-ignored rare failure
+		return err
+	}
+
+	paths := make([]string, len(items))
+	for i, it := range items {
+		paths[i] = it.path
+	}
+	root := commonRoot(paths)
+
+	out := cmd.OutOrStdout()
+	errOut := cmd.ErrOrStderr()
+
+	fmt.Fprintf(out, "Total files included: %d\n\n", len(items))
+	writeIndex(out, root, items)
+	writeFullFiles(out, errOut, root, items)
+
+	fmt.Fprintf(errOut, "OK: %d file(s) written to %s\n", len(items), dest)
+	return nil
+}
+
+func commonRoot(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	sep := string(filepath.Separator)
+	common := strings.Split(filepath.Clean(filepath.Dir(paths[0])), sep)
+	for _, p := range paths[1:] {
+		dir := strings.Split(filepath.Clean(filepath.Dir(p)), sep)
+		n := len(common)
+		if len(dir) < n {
+			n = len(dir)
+		}
+		i := 0
+		for i < n && common[i] == dir[i] {
+			i++
+		}
+		common = common[:i]
+	}
+	root := strings.Join(common, sep)
+	if root == "" && strings.HasPrefix(paths[0], sep) {
+		// Join of an empty prefix collapses to "", losing the leading
+		// separator when the only shared ancestor is the fs root itself
+		root = sep
+	}
+	return root
+}
+
+func runDepthLimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest string) error {
+	dc, err := computeDepthClosure(cmd, absGoFiles, depthLimit)
 	if err != nil {
 		return err
 	}
 
 	seen := map[string]bool{}
-	items := make([]item, 0, len(dc.fullFiles)+len(extraArgs))
+	items := make([]item, 0, len(dc.fullFiles)+len(otherArgs))
 	for _, f := range dc.fullFiles {
 		items = append(items, item{path: f})
 		seen[f] = true
 	}
-	extraItems, err := resolveExtraItems(extraArgs, seen)
+	otherItems, err := resolveItems(otherArgs, seen, true)
 	if err != nil {
 		//+gocover:ignore:block downstream of an already-ignored rare failure
 		return err
 	}
-	items = append(items, extraItems...)
+	items = append(items, otherItems...)
 
 	out := cmd.OutOrStdout()
 	errOut := cmd.ErrOrStderr()
 
-	fmt.Fprintf(out, "Input file: %s\n", relTo(dc.root, absFile))
+	writeInputFiles(out, dc.root, absGoFiles)
 	fmt.Fprintf(out, "Depth limit: %d\n", depthLimit)
 	fmt.Fprintf(out, "Full files: %d ", len(items))
-	if len(extraItems) > 0 {
-		fmt.Fprintf(out, "(of which %d extra) ", len(extraItems))
+	if len(otherItems) > 0 {
+		fmt.Fprintf(out, "(of which %d non-Go) ", len(otherItems))
 	}
 	fmt.Fprintf(out, "| Signatures: %d | Types: %d | Vars/consts: %d\n\n",
 		len(dc.sigs), len(dc.types), len(dc.vars))
@@ -138,29 +199,29 @@ func runDepthLimited(cmd *cobra.Command, absFile string, extraArgs []string, des
 	return nil
 }
 
-func runUnlimited(cmd *cobra.Command, absFile string, extraArgs []string, dest string) error {
-	files, root, err := computeClosure(cmd, absFile)
+func runUnlimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest string) error {
+	files, root, err := computeClosure(cmd, absGoFiles)
 	if err != nil {
 		return err
 	}
 
-	items := make([]item, 0, len(files)+len(extraArgs))
 	seen := map[string]bool{}
+	items := make([]item, 0, len(files)+len(otherArgs))
 	for _, f := range files {
 		items = append(items, item{path: f})
 		seen[f] = true
 	}
-	extraItems, err := resolveExtraItems(extraArgs, seen)
+	otherItems, err := resolveItems(otherArgs, seen, true)
 	if err != nil {
 		//+gocover:ignore:block downstream of an already-ignored rare failure
 		return err
 	}
-	items = append(items, extraItems...)
+	items = append(items, otherItems...)
 
 	out := cmd.OutOrStdout()
 	errOut := cmd.ErrOrStderr()
 
-	fmt.Fprintf(out, "Input file: %s\n", relTo(root, absFile))
+	writeInputFiles(out, root, absGoFiles)
 	fmt.Fprintf(out, "Total files included: %d\n\n", len(items))
 	writeIndex(out, root, items)
 	writeFullFiles(out, errOut, root, items)
@@ -169,11 +230,12 @@ func runUnlimited(cmd *cobra.Command, absFile string, extraArgs []string, dest s
 	return nil
 }
 
-// Always taken as-is, in full, regardless of --depth.
-func resolveExtraItems(extraArgs []string, seen map[string]bool) ([]item, error) {
-	items := make([]item, 0, len(extraArgs))
-	for _, e := range extraArgs {
-		abs, err := filepath.Abs(e)
+// tag marks whether these items should be flagged "(non-Go)" in the index;
+// false in pure-concatenation mode, where the distinction is meaningless.
+func resolveItems(args []string, seen map[string]bool, tag bool) ([]item, error) {
+	items := make([]item, 0, len(args))
+	for _, a := range args {
+		abs, err := filepath.Abs(a)
 		if err != nil { //+gocover:ignore:block os-level failure, rare
 			return nil, err
 		}
@@ -181,9 +243,20 @@ func resolveExtraItems(extraArgs []string, seen map[string]bool) ([]item, error)
 			continue
 		}
 		seen[abs] = true
-		items = append(items, item{path: abs, extra: true})
+		items = append(items, item{path: abs, nonGo: tag})
 	}
 	return items, nil
+}
+
+func writeInputFiles(out io.Writer, root string, absFiles []string) {
+	if len(absFiles) == 1 {
+		fmt.Fprintf(out, "Input file: %s\n", relTo(root, absFiles[0]))
+		return
+	}
+	fmt.Fprintln(out, "Input files:")
+	for _, f := range absFiles {
+		fmt.Fprintf(out, "  - %s\n", relTo(root, f))
+	}
 }
 
 func writeFullFiles(out, errOut io.Writer, root string, items []item) {
@@ -204,8 +277,8 @@ func writeFullFiles(out, errOut io.Writer, root string, items []item) {
 func writeIndex(out io.Writer, root string, items []item) {
 	fmt.Fprintln(out, "Index:")
 	for _, it := range items {
-		if it.extra {
-			fmt.Fprintf(out, "  - %s (extra)\n", relTo(root, it.path))
+		if it.nonGo {
+			fmt.Fprintf(out, "  - %s (non-Go)\n", relTo(root, it.path))
 		} else {
 			fmt.Fprintf(out, "  - %s\n", relTo(root, it.path))
 		}
