@@ -100,8 +100,8 @@ func TestRootRun_NonGoFiles(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "README.md (non-Go)") {
-		t.Errorf("index missing non-Go marker for README.md:\n%s", got)
+	if !strings.Contains(got, "README.md (literal)") {
+		t.Errorf("index missing literal marker for README.md:\n%s", got)
 	}
 	if !strings.Contains(got, "FILE: README.md") {
 		t.Errorf("output missing README.md content:\n%s", got)
@@ -157,8 +157,8 @@ func TestRootRun_GoFileAnyPosition(t *testing.T) {
 		t.Errorf("expected main.go to be treated as the Go entry point"+
 			" regardless of its position:\n%s", got)
 	}
-	if !strings.Contains(got, "README.md (non-Go)") {
-		t.Errorf("expected README.md to be marked non-Go:\n%s", got)
+	if !strings.Contains(got, "README.md (literal)") {
+		t.Errorf("expected README.md to be marked literal:\n%s", got)
 	}
 }
 
@@ -269,8 +269,8 @@ func TestRootRun_ConcatOnly_SingleNonGoFile(t *testing.T) {
 		t.Errorf("concat-only mode should not print an input file header:\n%s",
 			got)
 	}
-	if strings.Contains(got, "(non-Go)") {
-		t.Errorf("concat-only mode should not mark files non-Go:\n%s", got)
+	if strings.Contains(got, "(literal)") {
+		t.Errorf("concat-only mode should not mark files literal:\n%s", got)
 	}
 }
 
@@ -490,7 +490,7 @@ func A() {
 
 	got := out.String()
 	if !strings.Contains(got, "FILE: README.md") ||
-		!strings.Contains(got, "README.md (non-Go)") {
+		!strings.Contains(got, "README.md (literal)") {
 		t.Errorf("non-Go file should always be included in full regardless"+
 			" of --depth:\n%s", got)
 	}
@@ -711,5 +711,99 @@ func TestRootRun_ConcatOnly_Deduplication(t *testing.T) {
 	}
 	if !strings.Contains(got, "Total files included: 1") {
 		t.Errorf("expected exactly 1 file counted:\n%s", got)
+	}
+}
+
+// testdata/ is skipped by "./..." package matching, so a.go never shows up
+// in the loaded packages - this reproduces the original bug report (a .go
+// file passed as an argument, but excluded from the module's build), which
+// must now succeed as a literal file instead of erroring out.
+func TestRootRun_GoFileOutsideModule_TreatedAsLiteral(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod":                          "module testmod\n\ngo 1.21\n",
+		"main.go":                         "package main\n\nfunc main() {}\n",
+		filepath.Join("testdata", "a.go"): "package a\n\nfunc A() {}\n",
+	})
+
+	out, _ := resetRootCmd()
+	rootCmd.SetArgs([]string{
+		filepath.Join(dir, "main.go"),
+		filepath.Join(dir, "testdata", "a.go"),
+	})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "Total files included: 2") {
+		t.Errorf("output missing file count:\n%s", got)
+	}
+	if !strings.Contains(got, "FILE: "+filepath.Join("testdata", "a.go")) {
+		t.Errorf("output missing literal file content:\n%s", got)
+	}
+	if !strings.Contains(got,
+		filepath.Join("testdata", "a.go")+" (literal)") {
+		t.Errorf("index missing literal marker for the out-of-module .go"+
+			" file:\n%s", got)
+	}
+}
+
+func TestRootRun_DepthFlag_GoFileOutsideModule_TreatedAsLiteral(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod":                          "module testmod\n\ngo 1.21\n",
+		"main.go":                         "package main\n\nfunc main() {}\n",
+		filepath.Join("testdata", "a.go"): "package a\n\nfunc A() {}\n",
+	})
+
+	out, _ := resetRootCmd()
+	rootCmd.SetArgs([]string{
+		"--depth", "1",
+		filepath.Join(dir, "main.go"),
+		filepath.Join(dir, "testdata", "a.go"),
+	})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "FILE: "+filepath.Join("testdata", "a.go")) {
+		t.Errorf("output missing literal file content:\n%s", got)
+	}
+	if !strings.Contains(got,
+		filepath.Join("testdata", "a.go")+" (literal)") {
+		t.Errorf("index missing literal marker:\n%s", got)
+	}
+	if !strings.Contains(got, "(of which 1 extra/literal)") {
+		t.Errorf("summary line missing extra/literal count:\n%s", got)
+	}
+}
+
+// Every .go argument falls outside the module's build: the closure itself
+// is empty, but the run must still succeed with the file included
+// literally, rather than erroring out.
+func TestRootRun_AllGoEntriesOutsideModule(t *testing.T) {
+	dir := writeModule(t, map[string]string{
+		"go.mod":                          "module testmod\n\ngo 1.21\n",
+		filepath.Join("testdata", "a.go"): "package a\n\nfunc A() {}\n",
+	})
+
+	out, _ := resetRootCmd()
+	rootCmd.SetArgs([]string{filepath.Join(dir, "testdata", "a.go")})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "Total files included: 1") {
+		t.Errorf("output missing file count:\n%s", got)
+	}
+	if !strings.Contains(got, "FILE: "+filepath.Join("testdata", "a.go")) {
+		t.Errorf("output missing literal file content:\n%s", got)
 	}
 }

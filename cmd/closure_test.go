@@ -85,13 +85,17 @@ func Unused() {}
 `,
 	})
 
-	files, root, err := computeClosure(testCmd(),
+	files, literal, root, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if root != dir {
 		t.Fatalf("root = %q, want %q", root, dir)
+	}
+	if len(literal) != 0 {
+		t.Errorf("literal = %v, want none - main.go is part of the module",
+			literal)
 	}
 
 	want := map[string]bool{
@@ -126,7 +130,7 @@ func Thing() {}
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(),
+	files, _, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -165,7 +169,7 @@ func TestFoo(t *testing.T) {
 `,
 	})
 
-	files, root, err := computeClosure(testCmd(),
+	files, _, root, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "main_test.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -210,7 +214,7 @@ func TestExported(t *testing.T) {
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(),
+	files, _, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "lib/lib_test.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -261,17 +265,24 @@ func Ignored() {}
 `,
 	})
 
-	_, _, err := computeClosure(testCmd(),
+	files, literal, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "ignored.go")})
-	if err == nil {
-		t.Fatal("expected error for a file excluded from the build, got nil")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("files = %v, want none - ignored.go is excluded from the"+
+			" build", files)
+	}
+	if len(literal) != 1 || literal[0] != filepath.Join(dir, "ignored.go") {
+		t.Fatalf("literal = %v, want exactly [ignored.go]", literal)
 	}
 }
 
 func TestComputeClosure_ModuleNotFound(t *testing.T) {
 	dir := t.TempDir()
 
-	_, _, err := computeClosure(testCmd(),
+	_, _, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "main.go")})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -284,7 +295,7 @@ func TestComputeClosure_LoadError(t *testing.T) {
 		"main.go": "package main\n\nfunc main() {}\n",
 	})
 
-	_, _, err := computeClosure(testCmd(),
+	_, _, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "main.go")})
 	if err == nil {
 		t.Fatal("expected error from packages.Load, got nil")
@@ -306,7 +317,7 @@ func main() {
 	cmd := testCmd()
 	cmd.SetErr(errOut)
 
-	_, _, err := computeClosure(cmd, []string{filepath.Join(dir, "main.go")})
+	_, _, _, err := computeClosure(cmd, []string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected hard error: %v", err)
 	}
@@ -335,7 +346,7 @@ func (g Greeter) Greet() string { return "hi" }
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(),
+	files, _, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -367,7 +378,7 @@ func main() {
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(),
+	files, _, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "main.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -394,7 +405,7 @@ func Shared() {}
 		"unused.go": "package main\n\nfunc Unused() {}\n",
 	})
 
-	files, root, err := computeClosure(testCmd(),
+	files, _, root, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -441,7 +452,7 @@ func Shared() {}
 `,
 	})
 
-	files, _, err := computeClosure(testCmd(),
+	files, _, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -471,10 +482,17 @@ func Ignored() {}
 `,
 	})
 
-	_, _, err := computeClosure(testCmd(),
+	files, literal, _, err := computeClosure(testCmd(),
 		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "ignored.go")})
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(files) != 1 || files[0] != filepath.Join(dir, "a.go") {
+		t.Fatalf("files = %v, want exactly [a.go]", files)
+	}
+	if len(literal) != 1 || literal[0] != filepath.Join(dir, "ignored.go") {
+		t.Fatalf("literal = %v, want exactly [ignored.go]", literal)
 	}
 }
 

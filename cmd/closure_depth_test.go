@@ -27,10 +27,18 @@ func Ignored() {}
 `,
 	})
 
-	_, err := computeDepthClosure(testCmd(),
+	dc, err := computeDepthClosure(testCmd(),
 		[]string{filepath.Join(dir, "ignored.go")}, 2)
-	if err == nil {
-		t.Fatal("expected error for a file excluded from the build, got nil")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(dc.fullFiles) != 0 {
+		t.Errorf("fullFiles = %v, want none - ignored.go is excluded from"+
+			" the build", dc.fullFiles)
+	}
+	if len(dc.literal) != 1 ||
+		dc.literal[0] != filepath.Join(dir, "ignored.go") {
+		t.Fatalf("literal = %v, want exactly [ignored.go]", dc.literal)
 	}
 }
 
@@ -686,10 +694,18 @@ func Ignored() {}
 `,
 	})
 
-	_, err := computeDepthClosure(testCmd(),
+	dc, err := computeDepthClosure(testCmd(),
 		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "ignored.go")},
 		1)
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(dc.fullFiles) != 1 || dc.fullFiles[0] != filepath.Join(dir, "a.go") {
+		t.Fatalf("fullFiles = %v, want exactly [a.go]", dc.fullFiles)
+	}
+	if len(dc.literal) != 1 ||
+		dc.literal[0] != filepath.Join(dir, "ignored.go") {
+		t.Fatalf("literal = %v, want exactly [ignored.go]", dc.literal)
 	}
 }

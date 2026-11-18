@@ -25,6 +25,7 @@ import (
 type depthClosure struct {
 	root      string
 	fullFiles []string
+	literal   []string
 	sigs      []depthUnit
 	types     []depthUnit
 	vars      []depthUnit
@@ -110,14 +111,6 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 	if err != nil {
 		return nil, err
 	}
-	for _, absFile := range absFiles {
-		_, ok := byFile[absFile]
-		if !ok {
-			return nil, fmt.Errorf(
-				"file %s not found in module's loaded packages at %s",
-				absFile, root)
-		}
-	}
 
 	idx := buildObjIndex(byFile, fileToPkg)
 
@@ -128,8 +121,14 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 		file  string
 		depth int
 	}
+	var literal []string
 	var queue []queued
 	for _, absFile := range absFiles {
+		_, ok := byFile[absFile]
+		if !ok {
+			literal = append(literal, absFile)
+			continue
+		}
 		includedFiles[absFile] = true
 		visited[absFile] = true
 		queue = append(queue, queued{absFile, 0})
@@ -202,7 +201,8 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 		}
 	}
 
-	res := &depthClosure{root: root}
+	sort.Strings(literal)
+	res := &depthClosure{root: root, literal: literal}
 	for f := range includedFiles {
 		res.fullFiles = append(res.fullFiles, f)
 	}

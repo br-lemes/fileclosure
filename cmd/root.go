@@ -38,8 +38,8 @@ func init() {
 }
 
 type item struct {
-	nonGo bool
-	path  string
+	literal bool
+	path    string
 }
 
 func rootRun(cmd *cobra.Command, args []string) error {
@@ -141,12 +141,13 @@ func runDepthLimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest st
 	}
 
 	seen := map[string]bool{}
-	items := make([]item, 0, len(dc.fullFiles)+len(otherArgs))
+	items := make([]item, 0, len(dc.fullFiles)+len(otherArgs)+len(dc.literal))
 	for _, f := range dc.fullFiles {
 		items = append(items, item{path: f})
 		seen[f] = true
 	}
-	otherItems, err := resolveItems(otherArgs, seen, true)
+	extraArgs := append(append([]string{}, dc.literal...), otherArgs...)
+	otherItems, err := resolveItems(extraArgs, seen, true)
 	if err != nil {
 		//+gocover:ignore:block downstream of an already-ignored rare failure
 		return err
@@ -160,7 +161,7 @@ func runDepthLimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest st
 	fmt.Fprintf(out, "Depth limit: %d\n", depthLimit)
 	fmt.Fprintf(out, "Full files: %d ", len(items))
 	if len(otherItems) > 0 {
-		fmt.Fprintf(out, "(of which %d non-Go) ", len(otherItems))
+		fmt.Fprintf(out, "(of which %d extra/literal) ", len(otherItems))
 	}
 	fmt.Fprintf(out, "| Signatures: %d | Types: %d | Vars/consts: %d\n\n",
 		len(dc.sigs), len(dc.types), len(dc.vars))
@@ -200,18 +201,19 @@ func runDepthLimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest st
 }
 
 func runUnlimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest string) error {
-	files, root, err := computeClosure(cmd, absGoFiles)
+	files, literal, root, err := computeClosure(cmd, absGoFiles)
 	if err != nil {
 		return err
 	}
 
 	seen := map[string]bool{}
-	items := make([]item, 0, len(files)+len(otherArgs))
+	items := make([]item, 0, len(files)+len(otherArgs)+len(literal))
 	for _, f := range files {
 		items = append(items, item{path: f})
 		seen[f] = true
 	}
-	otherItems, err := resolveItems(otherArgs, seen, true)
+	extraArgs := append(append([]string{}, literal...), otherArgs...)
+	otherItems, err := resolveItems(extraArgs, seen, true)
 	if err != nil {
 		//+gocover:ignore:block downstream of an already-ignored rare failure
 		return err
@@ -243,7 +245,7 @@ func resolveItems(args []string, seen map[string]bool, tag bool) ([]item, error)
 			continue
 		}
 		seen[abs] = true
-		items = append(items, item{path: abs, nonGo: tag})
+		items = append(items, item{path: abs, literal: tag})
 	}
 	return items, nil
 }
@@ -277,8 +279,8 @@ func writeFullFiles(out, errOut io.Writer, root string, items []item) {
 func writeIndex(out io.Writer, root string, items []item) {
 	fmt.Fprintln(out, "Index:")
 	for _, it := range items {
-		if it.nonGo {
-			fmt.Fprintf(out, "  - %s (non-Go)\n", relTo(root, it.path))
+		if it.literal {
+			fmt.Fprintf(out, "  - %s (literal)\n", relTo(root, it.path))
 		} else {
 			fmt.Fprintf(out, "  - %s\n", relTo(root, it.path))
 		}

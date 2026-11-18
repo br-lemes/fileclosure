@@ -116,10 +116,10 @@ func scanRefs(node ast.Node, info *types.Info) []types.Object {
 	return objects
 }
 
-func computeClosure(cmd *cobra.Command, absFiles []string) (files []string, root string, err error) {
+func computeClosure(cmd *cobra.Command, absFiles []string) (files, literal []string, root string, err error) {
 	fset, byFile, fileToPkg, root, err := loadModule(cmd, absFiles[0])
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 
 	visited := map[string]bool{}
@@ -127,9 +127,8 @@ func computeClosure(cmd *cobra.Command, absFiles []string) (files []string, root
 	for _, absFile := range absFiles {
 		_, ok := byFile[absFile]
 		if !ok {
-			return nil, "", fmt.Errorf(
-				"file %s not found in module's loaded packages at %s",
-				absFile, root)
+			literal = append(literal, absFile)
+			continue
 		}
 		if !visited[absFile] {
 			visited[absFile] = true
@@ -171,8 +170,9 @@ func computeClosure(cmd *cobra.Command, absFiles []string) (files []string, root
 		files = append(files, f)
 	}
 	sort.Strings(files)
+	sort.Strings(literal)
 
-	return files, root, nil
+	return files, literal, root, nil
 }
 
 func relTo(root, path string) string {

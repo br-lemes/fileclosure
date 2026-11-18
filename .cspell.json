@@ -11,6 +11,7 @@
         "lemes",
         "pkgs",
         "stdlib",
+        "testdata",
         "testmod"
     ]
 }
