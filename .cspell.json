@@ -1,17 +1,18 @@
 {
-    "ignorePaths": ["go.mod", "go.sum"],
-    "language": "en",
-    "words": [
-        "coverprofile",
-        "fileclosure",
-        "fset",
-        "GOARCH",
-        "gocover",
-        "gopls",
-        "lemes",
-        "pkgs",
-        "stdlib",
-        "testdata",
-        "testmod"
-    ]
+	"ignorePaths": ["coverage.html", "go.mod", "go.sum"],
+	"language": "en",
+	"words": [
+		"coverprofile",
+		"fileclosure",
+		"fset",
+		"GOARCH",
+		"gocover",
+		"gopls",
+		"lemes",
+		"pkgs",
+		"stdlib",
+		"templ",
+		"testdata",
+		"testmod"
+	]
 }

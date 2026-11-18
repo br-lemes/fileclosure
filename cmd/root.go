@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -21,7 +22,9 @@ var rootCmd = &cobra.Command{
 	Long: `Concatenate files, resolving the Go dependency closure
 
 Arguments:
-  files   Go files pull in their dependency closure; others are included as-is`,
+  files   Go files pull in their dependency closure; others are included as-is.
+          A .templ file is analyzed through its generated _templ.go, but its
+          .templ source is what gets printed.`,
 }
 
 func Execute(version string) error {
@@ -45,21 +48,39 @@ type item struct {
 func rootRun(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
 
+	errOut := cmd.ErrOrStderr()
+
 	var goArgs, otherArgs []string
 	for _, a := range args {
-		if filepath.Ext(a) == ".go" {
+		switch filepath.Ext(a) {
+		case ".go":
 			goArgs = append(goArgs, a)
-		} else {
+		case ".templ":
+			gen := generatedFor(a)
+			if _, err := os.Stat(gen); err != nil {
+				fmt.Fprintf(errOut, "warning: %s has no generated %s"+
+					" (run 'templ generate'); including it as-is\n",
+					a, filepath.Base(gen))
+				otherArgs = append(otherArgs, a)
+				continue
+			}
+			goArgs = append(goArgs, gen)
+		default:
 			otherArgs = append(otherArgs, a)
 		}
 	}
 
 	absGoFiles := make([]string, 0, len(goArgs))
+	seenGo := map[string]bool{}
 	for _, g := range goArgs {
 		abs, err := filepath.Abs(g)
 		if err != nil { //+gocover:ignore:block only fails if cwd is gone
 			return err
 		}
+		if seenGo[abs] {
+			continue
+		}
+		seenGo[abs] = true
 		absGoFiles = append(absGoFiles, abs)
 	}
 
@@ -141,11 +162,7 @@ func runDepthLimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest st
 	}
 
 	seen := map[string]bool{}
-	items := make([]item, 0, len(dc.fullFiles)+len(otherArgs)+len(dc.literal))
-	for _, f := range dc.fullFiles {
-		items = append(items, item{path: f})
-		seen[f] = true
-	}
+	items := closureItems(dc.fullFiles, seen)
 	extraArgs := append(append([]string{}, dc.literal...), otherArgs...)
 	otherItems, err := resolveItems(extraArgs, seen, true)
 	if err != nil {
@@ -207,11 +224,7 @@ func runUnlimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest strin
 	}
 
 	seen := map[string]bool{}
-	items := make([]item, 0, len(files)+len(otherArgs)+len(literal))
-	for _, f := range files {
-		items = append(items, item{path: f})
-		seen[f] = true
-	}
+	items := closureItems(files, seen)
 	extraArgs := append(append([]string{}, literal...), otherArgs...)
 	otherItems, err := resolveItems(extraArgs, seen, true)
 	if err != nil {
@@ -232,6 +245,25 @@ func runUnlimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest strin
 	return nil
 }
 
+// Both the generated and the source paths go into seen: a literal argument
+// given later must not duplicate an entry already emitted.
+func closureItems(files []string, seen map[string]bool) []item {
+	items := make([]item, 0, len(files))
+	for _, f := range files {
+		p := displayPath(f)
+		if seen[p] {
+			continue
+		}
+		seen[f] = true
+		seen[p] = true
+		items = append(items, item{path: p})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].path < items[j].path
+	})
+	return items
+}
+
 // tag marks whether these items should be flagged "(non-Go)" in the index;
 // false in pure-concatenation mode, where the distinction is meaningless.
 func resolveItems(args []string, seen map[string]bool, tag bool) ([]item, error) {
@@ -241,6 +273,7 @@ func resolveItems(args []string, seen map[string]bool, tag bool) ([]item, error)
 		if err != nil { //+gocover:ignore:block os-level failure, rare
 			return nil, err
 		}
+		abs = displayPath(abs)
 		if seen[abs] {
 			continue
 		}
@@ -252,12 +285,12 @@ func resolveItems(args []string, seen map[string]bool, tag bool) ([]item, error)
 
 func writeInputFiles(out io.Writer, root string, absFiles []string) {
 	if len(absFiles) == 1 {
-		fmt.Fprintf(out, "Input file: %s\n", relTo(root, absFiles[0]))
+		fmt.Fprintf(out, "Input file: %s\n", relTo(root, displayPath(absFiles[0])))
 		return
 	}
 	fmt.Fprintln(out, "Input files:")
 	for _, f := range absFiles {
-		fmt.Fprintf(out, "  - %s\n", relTo(root, f))
+		fmt.Fprintf(out, "  - %s\n", relTo(root, displayPath(f)))
 	}
 }
 

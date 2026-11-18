@@ -224,9 +224,18 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 		}
 		sigDecl := &ast.FuncDecl{
 			Recv: decl.Recv, Name: decl.Name, Type: decl.Type}
+		sigFile := fc.declFile
+		sigText := printNode(fset, sigDecl)
+		// A generated templ component is more useful shown as the .templ
+		// declaration it came from than as the Go boilerplate signature.
+		if src, ok := templSource(fc.declFile); ok {
+			if text, ok := templSignature(src, fc.obj.Name()); ok {
+				sigFile, sigText = src, text
+			}
+		}
 		res.sigs = append(res.sigs, depthUnit{
-			file: fc.declFile,
-			text: printNode(fset, sigDecl),
+			file: sigFile,
+			text: sigText,
 		})
 		pkg := fileToPkg[fc.declFile]
 		// Signature-only: scan only the receiver + func type for further

@@ -8,6 +8,11 @@ other file is included as-is, no analysis. That includes a `.go` file that
 falls outside the module's build: instead of failing, it's included
 literally.
 
+[`templ`][templ] sources are supported too. A `.templ` file is analyzed
+through the `_templ.go` file generated from it (same package, full type
+information), but the `.templ` source is what gets printed — the
+generated Go is only boilerplate.
+
 It exists to solve a narrow problem: preparing minimal, precise context
 for an AI assistant (via a free web client, with no filesystem access)
 without pasting an entire codebase or manually hunting down every file a
@@ -15,8 +20,8 @@ piece of code touches.
 
 ## How it works
 
-1. Splits the given files into `.go` files and everything else, regardless
-   of the order they were given in.
+1. Splits the given files into `.go`/`.templ` files and everything else,
+   regardless of the order they were given in.
 2. If at least one `.go` file was given, loads the whole Go module (via
    `go.mod`) with full type information, using
    [`golang.org/x/tools/go/packages`][go-packages], which is the same
@@ -36,14 +41,18 @@ piece of code touches.
 6. Symbols from the standard library or external dependencies are skipped
    on purpose — an AI assistant generally already knows `fmt` or
    `net/http`, so their source isn't useful context.
-7. Non-`.go` files are never analyzed; they're just included in full.
-8. The final file list is written to a single output file: an index up
+7. A `.templ` file is never analyzed directly: its generated `_templ.go`
+   sibling is treated as a regular Go file — which is what makes component
+   calls (`<x.Header/>`) show up as plain Go calls in the closure — but at
+   output time the `_templ.go` is replaced by the `.templ` source.
+8. Other non-`.go` files are never analyzed; they're just included in full.
+9. The final file list is written to a single output file: an index up
    top, followed by each file's full contents under a `FILE: <path>`
    header.
 
-If no `.go` file is given at all, steps 2–6 are skipped entirely — no
-module lookup, no `go.mod` required — and the result is a plain
-concatenation of whatever files were given.
+If no `.go` or `.templ` file is given at all, steps 2–7 are skipped
+entirely — no module lookup, no `go.mod` required — and the result is a
+plain concatenation of whatever files were given.
 
 ## Usage
 
@@ -56,6 +65,10 @@ concatenation of whatever files were given.
 
 # non-Go files are included as-is, alongside the computed closure
 ./fileclosure main.go README.md config.yaml -o context.txt
+
+# templ components are analyzed via the generated _templ.go, but the
+# .templ source is what gets printed
+./fileclosure views/header.templ -o context.txt
 
 # a .go file outside the module's build is included literally, not rejected
 ./fileclosure main.go testdata/fixture.go -o context.txt
@@ -77,7 +90,9 @@ concatenation of whatever files were given.
   `.go` files are expanded into their dependency closure
   (merged across all given); other files are included as-is. A `.go`
   file outside the module's build is included as a literal file instead
-  of aborting the run.
+  of aborting the run. A `.templ` file is analyzed through its generated
+  `_templ.go` and printed from the `.templ` source; if the generated file
+  is missing, the `.templ` is included as-is with a warning.
 
 * **`--depth`**, **`-d`** (Default: `unlimited`)
   Limit dependency depth; functions first reached beyond
@@ -145,7 +160,8 @@ fileclosure/
 ├── cmd/
 │   ├── root.go            # Cobra command: arg splitting, wiring, output
 │   ├── closure.go         # unlimited closure: module loading + traversal
-│   └── closure_depth.go   # depth-limited closure: signature/type extraction
+│   ├── closure_depth.go   # depth-limited closure: signature/type extraction
+│   └── templ.go           # _templ.go <-> .templ mapping, signature extraction
 └── go.mod
 ```
 
@@ -164,5 +180,12 @@ errors, and Cobra takes care of printing them.
 * For multi-module repositories (more than one `go.mod`), run the tool
   once per module. A `.go` file belonging to another module isn't
   analyzed: it's included literally, exactly as a non-Go file would be.
+* `.templ` analysis depends on the generated `_templ.go` already existing
+  next to the source; run `templ generate` first. Without it, the
+  `.templ` is included as a literal file and a warning is printed.
+  Signatures in depth-limited mode are extracted from the `.templ`
+  source; if a component can't be located there, the generated Go
+  signature is used instead.
 
 [go-packages]: https://pkg.go.dev/golang.org/x/tools/go/packages
+[templ]: https://templ.guide
