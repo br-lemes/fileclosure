@@ -33,11 +33,8 @@ func Execute(version string) error {
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&outPath, "output", "o", "",
-		"output file (default: stdout)")
-	rootCmd.Flags().IntVarP(&depthLimit, "depth", "d", -1,
-		"limit dependency depth; functions first reached beyond this depth are"+
-			" included as signatures only, not full files (default: unlimited)")
+	rootCmd.Flags().StringVarP(&outPath, "output", "o", "", "output file (default: stdout)")
+	rootCmd.Flags().IntVarP(&depthLimit, "depth", "d", -1, "limit dependency depth; functions first reached beyond this depth are included as signatures only, not full files (default: unlimited)")
 }
 
 type item struct {
@@ -57,10 +54,9 @@ func rootRun(cmd *cobra.Command, args []string) error {
 			goArgs = append(goArgs, a)
 		case ".templ":
 			gen := generatedFor(a)
-			if _, err := os.Stat(gen); err != nil {
-				fmt.Fprintf(errOut, "warning: %s has no generated %s"+
-					" (run 'templ generate'); including it as-is\n",
-					a, filepath.Base(gen))
+			_, statErr := os.Stat(gen)
+			if statErr != nil {
+				fmt.Fprintf(errOut, "warning: %s has no generated %s (run 'templ generate'); including it as-is\n", a, filepath.Base(gen))
 				otherArgs = append(otherArgs, a)
 				continue
 			}
@@ -136,10 +132,7 @@ func commonRoot(paths []string) string {
 	common := strings.Split(filepath.Clean(filepath.Dir(paths[0])), sep)
 	for _, p := range paths[1:] {
 		dir := strings.Split(filepath.Clean(filepath.Dir(p)), sep)
-		n := len(common)
-		if len(dir) < n {
-			n = len(dir)
-		}
+		n := min(len(dir), len(common))
 		i := 0
 		for i < n && common[i] == dir[i] {
 			i++
@@ -180,35 +173,28 @@ func runDepthLimited(cmd *cobra.Command, absGoFiles, otherArgs []string, dest st
 	if len(otherItems) > 0 {
 		fmt.Fprintf(out, "(of which %d extra/literal) ", len(otherItems))
 	}
-	fmt.Fprintf(out, "| Signatures: %d | Types: %d | Vars/consts: %d\n\n",
-		len(dc.sigs), len(dc.types), len(dc.vars))
+	fmt.Fprintf(out, "| Signatures: %d | Types: %d | Vars/consts: %d\n\n", len(dc.sigs), len(dc.types), len(dc.vars))
 	writeIndex(out, dc.root, items)
 	writeFullFiles(out, errOut, dc.root, items)
 
 	if len(dc.sigs) > 0 {
-		fmt.Fprintf(out, "\n%s\nSIGNATURES (beyond depth limit)\n%s\n\n",
-			strings.Repeat("=", 70), strings.Repeat("=", 70))
+		fmt.Fprintf(out, "\n%s\nSIGNATURES (beyond depth limit)\n%s\n\n", strings.Repeat("=", 70), strings.Repeat("=", 70))
 		for _, s := range dc.sigs {
-			fmt.Fprintf(out, "// from %s\n%s\n\n", relTo(dc.root, s.file),
-				s.text)
+			fmt.Fprintf(out, "// from %s\n%s\n\n", relTo(dc.root, s.file), s.text)
 		}
 	}
 
 	if len(dc.types) > 0 {
-		fmt.Fprintf(out, "\n%s\nTYPES\n%s\n\n",
-			strings.Repeat("=", 70), strings.Repeat("=", 70))
+		fmt.Fprintf(out, "\n%s\nTYPES\n%s\n\n", strings.Repeat("=", 70), strings.Repeat("=", 70))
 		for _, t := range dc.types {
-			fmt.Fprintf(out, "// from %s\n%s\n\n", relTo(dc.root, t.file),
-				t.text)
+			fmt.Fprintf(out, "// from %s\n%s\n\n", relTo(dc.root, t.file), t.text)
 		}
 	}
 
 	if len(dc.vars) > 0 {
-		fmt.Fprintf(out, "\n%s\nVARS/CONSTS\n%s\n\n",
-			strings.Repeat("=", 70), strings.Repeat("=", 70))
+		fmt.Fprintf(out, "\n%s\nVARS/CONSTS\n%s\n\n", strings.Repeat("=", 70), strings.Repeat("=", 70))
 		for _, v := range dc.vars {
-			fmt.Fprintf(out, "// from %s\n%s\n\n", relTo(dc.root, v.file),
-				v.text)
+			fmt.Fprintf(out, "// from %s\n%s\n\n", relTo(dc.root, v.file), v.text)
 		}
 	}
 
@@ -298,12 +284,10 @@ func writeFullFiles(out, errOut io.Writer, root string, items []item) {
 	for _, it := range items {
 		content, err := os.ReadFile(it.path)
 		if err != nil {
-			fmt.Fprintf(errOut, "warning: could not read %s: %v\n", it.path,
-				err)
+			fmt.Fprintf(errOut, "warning: could not read %s: %v\n", it.path, err)
 			continue
 		}
-		fmt.Fprintf(out, "\n%s\nFILE: %s\n%s\n\n", strings.Repeat("=", 70),
-			relTo(root, it.path), strings.Repeat("=", 70))
+		fmt.Fprintf(out, "\n%s\nFILE: %s\n%s\n\n", strings.Repeat("=", 70), relTo(root, it.path), strings.Repeat("=", 70))
 		out.Write(content)
 		fmt.Fprintln(out)
 	}

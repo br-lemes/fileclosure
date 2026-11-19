@@ -46,8 +46,7 @@ func Foo() {}
 	if !strings.Contains(got, "Total files included: 2") {
 		t.Errorf("output missing file count:\n%s", got)
 	}
-	if !strings.Contains(got, "FILE: main.go") ||
-		!strings.Contains(got, "FILE: helper.go") {
+	if !strings.Contains(got, "FILE: main.go") || !strings.Contains(got, "FILE: helper.go") {
 		t.Errorf("output missing expected FILE headers:\n%s", got)
 	}
 }
@@ -68,8 +67,7 @@ func TestRootRun_OutputFlag(t *testing.T) {
 	}
 
 	if out.Len() != 0 {
-		t.Errorf("expected nothing written to the original out buffer, got %q",
-			out.String())
+		t.Errorf("expected nothing written to the original out buffer, got %q", out.String())
 	}
 
 	content, err := os.ReadFile(outFile)
@@ -154,8 +152,7 @@ func TestRootRun_GoFileAnyPosition(t *testing.T) {
 
 	got := out.String()
 	if !strings.Contains(got, "Input file: main.go") {
-		t.Errorf("expected main.go to be treated as the Go entry point"+
-			" regardless of its position:\n%s", got)
+		t.Errorf("expected main.go to be treated as the Go entry point regardless of its position:\n%s", got)
 	}
 	if !strings.Contains(got, "README.md (literal)") {
 		t.Errorf("expected README.md to be marked literal:\n%s", got)
@@ -180,7 +177,8 @@ func Shared() {}
 
 	out, _ := resetRootCmd()
 	rootCmd.SetArgs([]string{
-		filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go"),
+		filepath.Join(dir, "a.go"),
+		filepath.Join(dir, "b.go"),
 	})
 
 	err := rootCmd.Execute()
@@ -216,8 +214,7 @@ func TestRootRun_InputFileHeader_SingleEntry(t *testing.T) {
 		t.Errorf("expected singular input file header:\n%s", got)
 	}
 	if strings.Contains(got, "Input files:") {
-		t.Errorf("did not expect the plural header for a single entry:\n%s",
-			got)
+		t.Errorf("did not expect the plural header for a single entry:\n%s", got)
 	}
 }
 
@@ -230,7 +227,8 @@ func TestRootRun_InputFileHeader_MultipleEntries(t *testing.T) {
 
 	out, _ := resetRootCmd()
 	rootCmd.SetArgs([]string{
-		filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go"),
+		filepath.Join(dir, "a.go"),
+		filepath.Join(dir, "b.go"),
 	})
 
 	err := rootCmd.Execute()
@@ -266,8 +264,7 @@ func TestRootRun_ConcatOnly_SingleNonGoFile(t *testing.T) {
 		t.Errorf("output missing README.md content:\n%s", got)
 	}
 	if strings.Contains(got, "Input file") {
-		t.Errorf("concat-only mode should not print an input file header:\n%s",
-			got)
+		t.Errorf("concat-only mode should not print an input file header:\n%s", got)
 	}
 	if strings.Contains(got, "(literal)") {
 		t.Errorf("concat-only mode should not mark files literal:\n%s", got)
@@ -295,8 +292,7 @@ func TestRootRun_ConcatOnly_MultipleNonGoFiles(t *testing.T) {
 	if !strings.Contains(got, "Total files included: 2") {
 		t.Errorf("output missing file count:\n%s", got)
 	}
-	if !strings.Contains(got, "FILE: README.md") ||
-		!strings.Contains(got, "FILE: LICENSE.txt") {
+	if !strings.Contains(got, "FILE: README.md") || !strings.Contains(got, "FILE: LICENSE.txt") {
 		t.Errorf("output missing expected FILE headers:\n%s", got)
 	}
 }
@@ -442,18 +438,14 @@ type Config struct {
 	if !strings.Contains(got, "Depth limit: 1") {
 		t.Errorf("output missing depth limit header:\n%s", got)
 	}
-	if !strings.Contains(got, "SIGNATURES (beyond depth limit)") ||
-		!strings.Contains(got, "func B() Config") {
+	if !strings.Contains(got, "SIGNATURES (beyond depth limit)") || !strings.Contains(got, "func B() Config") {
 		t.Errorf("output missing expected signature section:\n%s", got)
 	}
-	if !strings.Contains(got, "TYPES") ||
-		!strings.Contains(got, "type Config struct") {
+	if !strings.Contains(got, "TYPES") || !strings.Contains(got, "type Config struct") {
 		t.Errorf("output missing expected types section:\n%s", got)
 	}
 	if strings.Contains(got, "FILE: b.go") {
-		t.Errorf(
-			"b.go should not be included in full past the depth limit:\n%s",
-			got)
+		t.Errorf("b.go should not be included in full past the depth limit:\n%s", got)
 	}
 }
 
@@ -478,7 +470,8 @@ func A() {
 
 	out, _ := resetRootCmd()
 	rootCmd.SetArgs([]string{
-		"--depth", "0",
+		"--depth",
+		"0",
 		filepath.Join(dir, "main.go"),
 		filepath.Join(dir, "README.md"),
 	})
@@ -489,10 +482,8 @@ func A() {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "FILE: README.md") ||
-		!strings.Contains(got, "README.md (literal)") {
-		t.Errorf("non-Go file should always be included in full regardless"+
-			" of --depth:\n%s", got)
+	if !strings.Contains(got, "FILE: README.md") || !strings.Contains(got, "README.md (literal)") {
+		t.Errorf("non-Go file should always be included in full regardless of --depth:\n%s", got)
 	}
 }
 
@@ -514,8 +505,10 @@ func Shared() {}
 
 	out, _ := resetRootCmd()
 	rootCmd.SetArgs([]string{
-		"--depth", "1",
-		filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go"),
+		"--depth",
+		"1",
+		filepath.Join(dir, "a.go"),
+		filepath.Join(dir, "b.go"),
 	})
 
 	err := rootCmd.Execute()
@@ -525,8 +518,7 @@ func Shared() {}
 
 	got := out.String()
 	if !strings.Contains(got, "FILE: shared.go") {
-		t.Errorf("shared.go should be reached within depth 1 of a.go:\n%s",
-			got)
+		t.Errorf("shared.go should be reached within depth 1 of a.go:\n%s", got)
 	}
 }
 
@@ -546,8 +538,7 @@ func TestRootRun_UnlimitedByDefault_NoDepthHeader(t *testing.T) {
 
 	got := out.String()
 	if strings.Contains(got, "Depth limit:") {
-		t.Errorf("depth header should not appear when --depth is not set:\n%s",
-			got)
+		t.Errorf("depth header should not appear when --depth is not set:\n%s", got)
 	}
 }
 
@@ -581,14 +572,11 @@ var MaxRetries = 5
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "VARS/CONSTS") ||
-		!strings.Contains(got, "var MaxRetries = 5") {
+	if !strings.Contains(got, "VARS/CONSTS") || !strings.Contains(got, "var MaxRetries = 5") {
 		t.Errorf("output missing expected vars/consts section:\n%s", got)
 	}
 	if strings.Contains(got, "FILE: config.go") {
-		t.Errorf(
-			"config.go should not be included in full just for one var:\n%s",
-			got)
+		t.Errorf("config.go should not be included in full just for one var:\n%s", got)
 	}
 }
 
@@ -743,10 +731,8 @@ func TestRootRun_GoFileOutsideModule_TreatedAsLiteral(t *testing.T) {
 	if !strings.Contains(got, "FILE: "+filepath.Join("testdata", "a.go")) {
 		t.Errorf("output missing literal file content:\n%s", got)
 	}
-	if !strings.Contains(got,
-		filepath.Join("testdata", "a.go")+" (literal)") {
-		t.Errorf("index missing literal marker for the out-of-module .go"+
-			" file:\n%s", got)
+	if !strings.Contains(got, filepath.Join("testdata", "a.go")+" (literal)") {
+		t.Errorf("index missing literal marker for the out-of-module .go file:\n%s", got)
 	}
 }
 
@@ -759,7 +745,8 @@ func TestRootRun_DepthFlag_GoFileOutsideModule_TreatedAsLiteral(t *testing.T) {
 
 	out, _ := resetRootCmd()
 	rootCmd.SetArgs([]string{
-		"--depth", "1",
+		"--depth",
+		"1",
 		filepath.Join(dir, "main.go"),
 		filepath.Join(dir, "testdata", "a.go"),
 	})
@@ -773,8 +760,7 @@ func TestRootRun_DepthFlag_GoFileOutsideModule_TreatedAsLiteral(t *testing.T) {
 	if !strings.Contains(got, "FILE: "+filepath.Join("testdata", "a.go")) {
 		t.Errorf("output missing literal file content:\n%s", got)
 	}
-	if !strings.Contains(got,
-		filepath.Join("testdata", "a.go")+" (literal)") {
+	if !strings.Contains(got, filepath.Join("testdata", "a.go")+" (literal)") {
 		t.Errorf("index missing literal marker:\n%s", got)
 	}
 	if !strings.Contains(got, "(of which 1 extra/literal)") {

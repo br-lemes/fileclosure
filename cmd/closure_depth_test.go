@@ -9,8 +9,7 @@ import (
 func TestComputeDepthClosure_ModuleNotFound(t *testing.T) {
 	dir := t.TempDir()
 
-	_, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 2)
+	_, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 2)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -27,17 +26,14 @@ func Ignored() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "ignored.go")}, 2)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "ignored.go")}, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(dc.fullFiles) != 0 {
-		t.Errorf("fullFiles = %v, want none - ignored.go is excluded from"+
-			" the build", dc.fullFiles)
+		t.Errorf("fullFiles = %v, want none - ignored.go is excluded from the build", dc.fullFiles)
 	}
-	if len(dc.literal) != 1 ||
-		dc.literal[0] != filepath.Join(dir, "ignored.go") {
+	if len(dc.literal) != 1 || dc.literal[0] != filepath.Join(dir, "ignored.go") {
 		t.Fatalf("literal = %v, want exactly [ignored.go]", dc.literal)
 	}
 }
@@ -63,8 +59,7 @@ func B() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 2)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -116,8 +111,7 @@ func C() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -142,12 +136,10 @@ func C() {}
 		t.Fatalf("sigs = %v, want exactly one signature from b.go", dc.sigs)
 	}
 	if !strings.Contains(dc.sigs[0].text, "func B()") {
-		t.Errorf("signature text = %q, want it to declare func B()",
-			dc.sigs[0].text)
+		t.Errorf("signature text = %q, want it to declare func B()", dc.sigs[0].text)
 	}
 	if strings.Contains(dc.sigs[0].text, "C()") {
-		t.Errorf("signature text leaked the function body: %q",
-			dc.sigs[0].text)
+		t.Errorf("signature text leaked the function body: %q", dc.sigs[0].text)
 	}
 }
 
@@ -180,18 +172,15 @@ type Config struct {
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(dc.sigs) != 1 ||
-		!strings.Contains(dc.sigs[0].text, "func B() Config") {
+	if len(dc.sigs) != 1 || !strings.Contains(dc.sigs[0].text, "func B() Config") {
 		t.Fatalf("sigs = %v, want a signature returning Config", dc.sigs)
 	}
-	if len(dc.types) != 1 ||
-		!strings.Contains(dc.types[0].text, "type Config struct") {
+	if len(dc.types) != 1 || !strings.Contains(dc.types[0].text, "type Config struct") {
 		t.Fatalf("types = %v, want Config extracted standalone", dc.types)
 	}
 	if dc.types[0].file != filepath.Join(dir, "b.go") {
@@ -222,15 +211,13 @@ type Config struct {
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if len(dc.types) != 0 {
-		t.Errorf("types = %v, want none - Config is already visible via a.go",
-			dc.types)
+		t.Errorf("types = %v, want none - Config is already visible via a.go", dc.types)
 	}
 }
 
@@ -256,14 +243,12 @@ var MaxRetries = 5
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(dc.vars) != 1 ||
-		!strings.Contains(dc.vars[0].text, "var MaxRetries = 5") {
+	if len(dc.vars) != 1 || !strings.Contains(dc.vars[0].text, "var MaxRetries = 5") {
 		t.Fatalf("vars = %v, want MaxRetries extracted standalone", dc.vars)
 	}
 	for _, f := range dc.fullFiles {
@@ -300,15 +285,13 @@ const HiddenConst = 99
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if len(dc.vars) != 0 {
-		t.Errorf("vars = %v, want none - HiddenConst is only used inside a"+
-			" signature-only body", dc.vars)
+		t.Errorf("vars = %v, want none - HiddenConst is only used inside a signature-only body", dc.vars)
 	}
 }
 
@@ -327,14 +310,12 @@ func A() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 0)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(dc.fullFiles) != 1 ||
-		dc.fullFiles[0] != filepath.Join(dir, "main.go") {
+	if len(dc.fullFiles) != 1 || dc.fullFiles[0] != filepath.Join(dir, "main.go") {
 		t.Fatalf("fullFiles = %v, want only main.go", dc.fullFiles)
 	}
 	if len(dc.sigs) != 1 || !strings.Contains(dc.sigs[0].text, "func A()") {
@@ -357,13 +338,11 @@ const _ = 2
 	})
 
 	// Exercises buildObjIndex's blank-identifier skip (var _ / const _).
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(dc.fullFiles) != 1 ||
-		dc.fullFiles[0] != filepath.Join(dir, "main.go") {
+	if len(dc.fullFiles) != 1 || dc.fullFiles[0] != filepath.Join(dir, "main.go") {
 		t.Fatalf("fullFiles = %v, want only main.go", dc.fullFiles)
 	}
 }
@@ -387,8 +366,7 @@ func A() {
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -406,8 +384,7 @@ func A() {
 		}
 	}
 	if len(dc.sigs) != 0 {
-		t.Errorf("expected no signatures, fmt.Println is out of scope, got %v",
-			dc.sigs)
+		t.Errorf("expected no signatures, fmt.Println is out of scope, got %v", dc.sigs)
 	}
 }
 
@@ -441,8 +418,7 @@ func Shared() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 2)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -454,8 +430,7 @@ func Shared() {}
 		filepath.Join(dir, "shared.go"): true,
 	}
 	if len(dc.fullFiles) != len(want) {
-		t.Fatalf("fullFiles = %v, want exactly %v (shared.go once)",
-			dc.fullFiles, want)
+		t.Fatalf("fullFiles = %v, want exactly %v (shared.go once)", dc.fullFiles, want)
 	}
 	for _, f := range dc.fullFiles {
 		if !want[f] {
@@ -492,15 +467,13 @@ func B() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 2)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if len(dc.vars) != 0 {
-		t.Errorf("vars = %v, want none - MaxRetries is already visible via"+
-			" config.go", dc.vars)
+		t.Errorf("vars = %v, want none - MaxRetries is already visible via config.go", dc.vars)
 	}
 	want := map[string]bool{
 		filepath.Join(dir, "main.go"):   true,
@@ -537,8 +510,7 @@ func FuncC() {}
 
 	// depth 0 forces all three into sigs, exercising sortUnits' comparator
 	// both across files and within shared.go.
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 0)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -581,20 +553,16 @@ func (g Greeter) Greet() string { return "hi" }
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "main.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{filepath.Join(dir, "main.go")}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(dc.sigs) != 1 ||
-		!strings.Contains(dc.sigs[0].text, "func (g Greeter) Greet() string") {
+	if len(dc.sigs) != 1 || !strings.Contains(dc.sigs[0].text, "func (g Greeter) Greet() string") {
 		t.Fatalf("sigs = %v, want Greeter.Greet as a signature", dc.sigs)
 	}
-	if len(dc.types) != 1 ||
-		!strings.Contains(dc.types[0].text, "type Greeter struct") {
-		t.Fatalf("types = %v, want Greeter extracted for the receiver",
-			dc.types)
+	if len(dc.types) != 1 || !strings.Contains(dc.types[0].text, "type Greeter struct") {
+		t.Fatalf("types = %v, want Greeter extracted for the receiver", dc.types)
 	}
 }
 
@@ -614,8 +582,10 @@ func Shared() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")}, 1)
+	dc, err := computeDepthClosure(testCmd(), []string{
+		filepath.Join(dir, "a.go"),
+		filepath.Join(dir, "b.go"),
+	}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -659,8 +629,10 @@ func C() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")}, 0)
+	dc, err := computeDepthClosure(testCmd(), []string{
+		filepath.Join(dir, "a.go"),
+		filepath.Join(dir, "b.go"),
+	}, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -694,9 +666,10 @@ func Ignored() {}
 `,
 	})
 
-	dc, err := computeDepthClosure(testCmd(),
-		[]string{filepath.Join(dir, "a.go"), filepath.Join(dir, "ignored.go")},
-		1)
+	dc, err := computeDepthClosure(testCmd(), []string{
+		filepath.Join(dir, "a.go"),
+		filepath.Join(dir, "ignored.go"),
+	}, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -704,8 +677,7 @@ func Ignored() {}
 	if len(dc.fullFiles) != 1 || dc.fullFiles[0] != filepath.Join(dir, "a.go") {
 		t.Fatalf("fullFiles = %v, want exactly [a.go]", dc.fullFiles)
 	}
-	if len(dc.literal) != 1 ||
-		dc.literal[0] != filepath.Join(dir, "ignored.go") {
+	if len(dc.literal) != 1 || dc.literal[0] != filepath.Join(dir, "ignored.go") {
 		t.Fatalf("literal = %v, want exactly [ignored.go]", dc.literal)
 	}
 }

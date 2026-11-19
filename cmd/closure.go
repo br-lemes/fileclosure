@@ -34,8 +34,7 @@ func fileInModule(root, absPath string) bool {
 	if err != nil { //+gocover:ignore:block Windows-only cross-volume error
 		return false
 	}
-	return rel == "." || (rel != ".." &&
-		!strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func loadModule(cmd *cobra.Command, absFile string) (fset *token.FileSet, byFile map[string]*ast.File, fileToPkg map[string]*packages.Package, root string, err error) {
@@ -46,9 +45,7 @@ func loadModule(cmd *cobra.Command, absFile string) (fset *token.FileSet, byFile
 
 	fset = token.NewFileSet()
 	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles |
-			packages.NeedCompiledGoFiles | packages.NeedImports |
-			packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo,
+		Mode:  packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports | packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo,
 		Dir:   root,
 		Fset:  fset,
 		Tests: true,
@@ -59,8 +56,7 @@ func loadModule(cmd *cobra.Command, absFile string) (fset *token.FileSet, byFile
 		return nil, nil, nil, "", fmt.Errorf("loading packages: %w", err)
 	}
 	if packages.PrintErrors(pkgs) > 0 {
-		fmt.Fprintln(cmd.ErrOrStderr(),
-			"warning: some packages had load errors (continuing anyway)")
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning: some packages had load errors (continuing anyway)")
 	}
 
 	byFile = map[string]*ast.File{}

@@ -40,15 +40,17 @@ func TestTemplSourceMapping(t *testing.T) {
 		t.Fatalf("templSource = %q, %v; want header.templ", got, ok)
 	}
 
-	if _, ok := templSource(filepath.Join(dir, "missing_templ.go")); ok {
+	_, found := templSource(filepath.Join(dir, "missing_templ.go"))
+	if found {
 		t.Error("templSource should not match without a sibling .templ file")
 	}
-	if _, ok := templSource(filepath.Join(dir, "header.go")); ok {
+	_, found = templSource(filepath.Join(dir, "header.go"))
+	if found {
 		t.Error("templSource should not match a non-generated .go file")
 	}
 
-	if got := displayPath(filepath.Join(dir, "header_templ.go")); got !=
-		filepath.Join(dir, "header.templ") {
+	got = displayPath(filepath.Join(dir, "header_templ.go"))
+	if got != filepath.Join(dir, "header.templ") {
 		t.Errorf("displayPath = %q, want header.templ", got)
 	}
 }
@@ -93,7 +95,8 @@ templ Generic[T ~[]byte](items T) {
 		}
 	}
 
-	if _, ok := templSignature(src, "Missing"); ok {
+	_, found := templSignature(src, "Missing")
+	if found {
 		t.Error("expected no signature for an undeclared component")
 	}
 }
@@ -105,11 +108,13 @@ func TestTemplSignature_Malformed(t *testing.T) {
 	src := filepath.Join(dir, "a.templ")
 
 	for _, name := range []string{"A", "B", "C"} {
-		if _, ok := templSignature(src, name); ok {
+		_, found := templSignature(src, name)
+		if found {
 			t.Errorf("%s: expected malformed declarations to be rejected", name)
 		}
 	}
-	if _, ok := templSignature(filepath.Join(dir, "nope.templ"), "A"); ok {
+	_, found := templSignature(filepath.Join(dir, "nope.templ"), "A")
+	if found {
 		t.Error("expected an unreadable source to be rejected")
 	}
 }
@@ -149,8 +154,7 @@ func TestRootRun_TemplEntryPoint(t *testing.T) {
 	if !strings.Contains(got, "Input file: header.templ") {
 		t.Errorf("input header should show the .templ source:\n%s", got)
 	}
-	if !strings.Contains(got, "FILE: header.templ") ||
-		!strings.Contains(got, "templ Header(title string)") {
+	if !strings.Contains(got, "FILE: header.templ") || !strings.Contains(got, "templ Header(title string)") {
 		t.Errorf("output should contain the .templ source:\n%s", got)
 	}
 	if strings.Contains(got, "FILE: header_templ.go") {
@@ -308,8 +312,7 @@ templ Footer(msg string) {
 
 	got := out.String()
 	if !strings.Contains(got, "FILE: footer.templ") {
-		t.Errorf("footer.templ should be included within the depth limit:\n%s",
-			got)
+		t.Errorf("footer.templ should be included within the depth limit:\n%s", got)
 	}
 	if strings.Contains(got, "footer_templ.go") {
 		t.Errorf("generated Go file leaked into the output:\n%s", got)

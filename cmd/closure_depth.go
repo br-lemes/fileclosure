@@ -181,8 +181,10 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 					queue = append(queue, queued{declFile, nextDepth})
 				} else if !funcSeen[obj] {
 					funcSeen[obj] = true
-					funcCandidates = append(funcCandidates,
-						funcCandidate{obj, declFile})
+					funcCandidates = append(funcCandidates, funcCandidate{
+						obj:      obj,
+						declFile: declFile,
+					})
 				}
 			case *types.TypeName:
 				if !typeSeenRaw[obj] {
@@ -195,8 +197,10 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 					continue // local var/param (not in idx), or already seen
 				}
 				varSeenRaw[obj] = true
-				varCandidates = append(varCandidates,
-					varCandidate{obj, declFile})
+				varCandidates = append(varCandidates, varCandidate{
+					obj:      obj,
+					declFile: declFile,
+				})
 			}
 		}
 	}
@@ -223,29 +227,29 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 			continue
 		}
 		sigDecl := &ast.FuncDecl{
-			Recv: decl.Recv, Name: decl.Name, Type: decl.Type}
+			Recv: decl.Recv,
+			Name: decl.Name,
+			Type: decl.Type,
+		}
 		sigFile := fc.declFile
 		sigText := printNode(fset, sigDecl)
 		// A generated templ component is more useful shown as the .templ
 		// declaration it came from than as the Go boilerplate signature.
-		if src, ok := templSource(fc.declFile); ok {
-			if text, ok := templSignature(src, fc.obj.Name()); ok {
+		src, ok := templSource(fc.declFile)
+		if ok {
+			text, ok := templSignature(src, fc.obj.Name())
+			if ok {
 				sigFile, sigText = src, text
 			}
 		}
-		res.sigs = append(res.sigs, depthUnit{
-			file: sigFile,
-			text: sigText,
-		})
+		res.sigs = append(res.sigs, depthUnit{file: sigFile, text: sigText})
 		pkg := fileToPkg[fc.declFile]
 		// Signature-only: scan only the receiver + func type for further
 		// type refs, never the body.
 		if decl.Recv != nil {
-			typeQueue = append(typeQueue,
-				filterTypeNames(scanRefs(decl.Recv, pkg.TypesInfo))...)
+			typeQueue = append(typeQueue, filterTypeNames(scanRefs(decl.Recv, pkg.TypesInfo))...)
 		}
-		typeQueue = append(typeQueue,
-			filterTypeNames(scanRefs(decl.Type, pkg.TypesInfo))...)
+		typeQueue = append(typeQueue, filterTypeNames(scanRefs(decl.Type, pkg.TypesInfo))...)
 	}
 
 	for _, vc := range varCandidates {
@@ -263,8 +267,7 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 			text: printValueSpec(fset, idx.valueTok[vc.obj], spec),
 		})
 		pkg := fileToPkg[vc.declFile]
-		typeQueue = append(typeQueue,
-			filterTypeNames(scanRefs(spec, pkg.TypesInfo))...)
+		typeQueue = append(typeQueue, filterTypeNames(scanRefs(spec, pkg.TypesInfo))...)
 	}
 
 	typeDone := map[types.Object]bool{}
@@ -290,8 +293,7 @@ func computeDepthClosure(cmd *cobra.Command, absFiles []string, depthLimit int) 
 			text: printTypeSpec(fset, spec),
 		})
 		pkg := fileToPkg[declFile]
-		typeQueue = append(typeQueue,
-			filterTypeNames(scanRefs(spec, pkg.TypesInfo))...)
+		typeQueue = append(typeQueue, filterTypeNames(scanRefs(spec, pkg.TypesInfo))...)
 	}
 
 	sortUnits(res.sigs)

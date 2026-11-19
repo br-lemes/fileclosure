@@ -11,7 +11,8 @@ func templSource(goFile string) (string, bool) {
 		return "", false
 	}
 	src := strings.TrimSuffix(goFile, "_templ.go") + ".templ"
-	if _, err := os.Stat(src); err != nil {
+	_, err := os.Stat(src)
+	if err != nil {
 		return "", false
 	}
 	return src, true
@@ -24,7 +25,8 @@ func generatedFor(templFile string) string {
 // displayPath is for output only: the .templ source is what matters,
 // the generated Go is boilerplate.
 func displayPath(path string) string {
-	if src, ok := templSource(path); ok {
+	src, ok := templSource(path)
+	if ok {
 		return src
 	}
 	return path
@@ -67,8 +69,7 @@ func templSignature(src, name string) (string, bool) {
 }
 
 func skipSpace(s string, i int) int {
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t' ||
-		s[i] == '\n' || s[i] == '\r') {
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
 		i++
 	}
 	return i
